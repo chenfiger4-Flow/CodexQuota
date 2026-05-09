@@ -1,0 +1,29 @@
+.build/
+.swiftpm/
+DerivedData/
+
+*.xcodeproj
+*.xcworkspace
+*.dSYM/
+*.app/
+
+.DS_Store
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Local runtime config and credentials. Never commit these.
+.codex-menubar/
+.codex/
+auth.json
+config.json
+rpc.log
+
+# Local design/reference captures.
+*.heic
+*.HEIC
+*.preview.png
+
+# Generated protocol dumps used during local exploration.
+.codex-appserver-schema/
