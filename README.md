@@ -24,6 +24,75 @@ Check that Codex CLI works before launching the app:
 codex --version
 ```
 
+## 中文使用说明
+
+CodexQuota 是一个 macOS 状态栏小工具，用来显示当前 Codex 账号的额度剩余比例和重置时间。它不会要求你输入 ChatGPT 密码、token 或 cookie，而是读取你本机已经登录的 Codex CLI。
+
+### 使用前准备
+
+1. 确认已经安装并登录 Codex CLI。
+
+```bash
+codex --version
+```
+
+2. 如果 `codex --version` 可以正常输出版本号，就可以启动本工具。
+
+### 运行方式
+
+从仓库根目录直接运行：
+
+```bash
+swift run
+```
+
+也可以打包成 `.app`：
+
+```bash
+bash scripts/build-app.sh
+open .build/CodexQuota.app
+```
+
+安装到“应用程序”：
+
+```bash
+cp -R .build/CodexQuota.app /Applications/CodexQuota.app
+open /Applications/CodexQuota.app
+```
+
+### 状态栏显示含义
+
+- 第一行显示 5 小时窗口的剩余额度百分比和倒计时。
+- 第二行显示每周窗口的剩余额度百分比和重置日期。
+- 背景为蓝色表示额度充足，橙色表示额度偏低，红色表示额度很低。
+- 点击状态栏小组件可以查看更完整的额度、重置时间、计划类型和 credits 信息。
+
+### 配置文件
+
+配置文件位置：
+
+```text
+~/.codex-menubar/config.json
+```
+
+当前支持的配置项：
+
+```json
+{
+  "source": "codexRPC",
+  "refreshIntervalSeconds": 30
+}
+```
+
+`refreshIntervalSeconds` 表示刷新 Codex 额度的间隔秒数。配置文件不存在时，应用会自动创建默认配置。
+
+### 常见问题
+
+- 如果显示“读取中”或“读取失败”，先确认终端里 `codex --version` 可以正常运行。
+- 如果显示“启动失败”，通常是应用找不到 `codex` 命令，建议确认 Codex CLI 安装路径在系统 `PATH` 中。
+- 如果显示“超时”，可能是 Codex CLI 本身响应较慢，稍等后可以从菜单里手动刷新配置。
+- 不要把 `~/.codex/`、`~/.codex/auth.json` 或 `~/.codex-menubar/rpc.log` 上传到公开仓库。
+
 ## Build
 
 Run from the repository root:
