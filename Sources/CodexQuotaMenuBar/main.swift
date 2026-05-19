@@ -8,6 +8,7 @@ struct QuotaConfig: Codable {
     var resetAt: Date?
     var refreshIntervalSeconds: TimeInterval
     var windowDurationSeconds: TimeInterval?
+    var proxyURL: String?
 
     static let fallback = QuotaConfig(
         source: "codexRPC",
@@ -15,7 +16,8 @@ struct QuotaConfig: Codable {
         remainingQuota: nil,
         resetAt: nil,
         refreshIntervalSeconds: 30,
-        windowDurationSeconds: nil
+        windowDurationSeconds: nil,
+        proxyURL: nil
     )
 }
 
@@ -266,7 +268,7 @@ final class QuotaProvider {
 
     func load() -> QuotaSnapshot {
         let config = configStore.load()
-        return rpcClient.fetchRateLimits(refreshIntervalSeconds: config.refreshIntervalSeconds)
+        return rpcClient.fetchRateLimits(config: config)
     }
 
     func ensurePrimaryConfig(using snapshot: QuotaSnapshot) {
@@ -276,7 +278,8 @@ final class QuotaProvider {
             remainingQuota: nil,
             resetAt: nil,
             refreshIntervalSeconds: snapshot.refreshIntervalSeconds,
-            windowDurationSeconds: nil
+            windowDurationSeconds: nil,
+            proxyURL: nil
         )
         configStore.ensurePrimaryConfig(using: config)
     }
@@ -347,6 +350,7 @@ final class CodexRPCClient: @unchecked Sendable {
     private var process: Process?
     private var inputPipe: Pipe?
     private var nextRequestId = 1
+    private var activeProxyURL: String?
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -372,33 +376,40 @@ final class CodexRPCClient: @unchecked Sendable {
         stopProcess()
     }
 
-    func fetchRateLimits(refreshIntervalSeconds: TimeInterval) -> QuotaSnapshot {
+    func fetchRateLimits(config: QuotaConfig) -> QuotaSnapshot {
         do {
-            try ensureProcess()
+            try ensureProcess(proxyURL: config.proxyURL)
             let response = try request(method: "account/rateLimits/read", params: nil)
-            return parseSnapshot(response, refreshIntervalSeconds: refreshIntervalSeconds)
+            return parseSnapshot(response, refreshIntervalSeconds: config.refreshIntervalSeconds)
         } catch {
             stopProcess()
             do {
-                try ensureProcess()
+                try ensureProcess(proxyURL: config.proxyURL)
                 let response = try request(method: "account/rateLimits/read", params: nil)
-                return parseSnapshot(response, refreshIntervalSeconds: refreshIntervalSeconds)
+                return parseSnapshot(response, refreshIntervalSeconds: config.refreshIntervalSeconds)
             } catch {
-                return .failure(error.localizedDescription, refreshIntervalSeconds: refreshIntervalSeconds)
+                return .failure(error.localizedDescription, refreshIntervalSeconds: config.refreshIntervalSeconds)
             }
         }
     }
 
-    private func ensureProcess() throws {
+    private func ensureProcess(proxyURL: String?) throws {
+        let normalizedProxyURL = normalizeProxyURL(proxyURL)
+
         lock.lock()
         let runningProcess = process
+        let runningProxyURL = activeProxyURL
         lock.unlock()
 
-        if runningProcess?.isRunning == true {
+        if runningProcess?.isRunning == true, runningProxyURL == normalizedProxyURL {
             return
         }
 
-        try startProcess()
+        if runningProcess?.isRunning == true {
+            stopProcess()
+        }
+
+        try startProcess(proxyURL: normalizedProxyURL)
         _ = try request(
             method: "initialize",
             params: [
@@ -415,7 +426,7 @@ final class CodexRPCClient: @unchecked Sendable {
         try notification(method: "initialized")
     }
 
-    private func startProcess() throws {
+    private func startProcess(proxyURL: String?) throws {
         try prepareLog()
         appendLog("starting \(processPath)")
 
@@ -434,7 +445,7 @@ final class CodexRPCClient: @unchecked Sendable {
         } else {
             newProcess.arguments = rpcArguments
         }
-        newProcess.environment = rpcEnvironment()
+        newProcess.environment = rpcEnvironment(proxyURL: proxyURL)
 
         let newInputPipe = Pipe()
         let outputPipe = Pipe()
@@ -468,6 +479,7 @@ final class CodexRPCClient: @unchecked Sendable {
         lock.lock()
         process = newProcess
         inputPipe = newInputPipe
+        activeProxyURL = proxyURL
         lock.unlock()
     }
 
@@ -558,6 +570,7 @@ final class CodexRPCClient: @unchecked Sendable {
         let currentProcess = process
         process = nil
         inputPipe = nil
+        activeProxyURL = nil
         lock.unlock()
 
         readState.reset()
@@ -586,7 +599,7 @@ final class CodexRPCClient: @unchecked Sendable {
         }
     }
 
-    private func rpcEnvironment() -> [String: String] {
+    private func rpcEnvironment(proxyURL: String?) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let existingPath = environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
@@ -601,7 +614,32 @@ final class CodexRPCClient: @unchecked Sendable {
         ]
         environment["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
         environment["HOME"] = home
+        if let proxyURL {
+            environment["HTTP_PROXY"] = proxyURL
+            environment["HTTPS_PROXY"] = proxyURL
+            environment["ALL_PROXY"] = proxyURL
+            environment["http_proxy"] = proxyURL
+            environment["https_proxy"] = proxyURL
+            environment["all_proxy"] = proxyURL
+            appendLog("using proxy \(redactedProxyURL(proxyURL))")
+        }
         return environment
+    }
+
+    private func normalizeProxyURL(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func redactedProxyURL(_ value: String) -> String {
+        guard var components = URLComponents(string: value) else {
+            return "<configured>"
+        }
+        if components.password != nil {
+            components.password = "***"
+        }
+        return components.string ?? "<configured>"
     }
 
     private func parseWindow(_ value: Any?, fallbackLabel: String) -> RateLimitWindowSnapshot? {

@@ -85,11 +85,21 @@ open /Applications/CodexQuota.app
 ```
 
 `refreshIntervalSeconds` 表示刷新 Codex 额度的间隔秒数。配置文件不存在时，应用会自动创建默认配置。
+`proxyURL` 是可选项。如果你使用 Clash、Surge、Loon 等本地代理，而状态栏 App 显示读取失败，可以把它设置为你的代理地址：
+
+```json
+{
+  "source": "codexRPC",
+  "refreshIntervalSeconds": 30,
+  "proxyURL": "http://127.0.0.1:7890"
+}
+```
 
 ### 常见问题
 
 - 如果显示“读取中”或“读取失败”，先确认终端里 `codex --version` 可以正常运行。
 - 如果显示“启动失败”，通常是应用找不到 `codex` 命令，建议确认 Codex CLI 安装路径在系统 `PATH` 中。
+- 如果日志里出现 `failed to fetch codex rate limits` 或 `chatgpt.com/backend-api/wham/usage`，通常是菜单栏 App 没有继承终端代理环境，请在配置文件里设置 `proxyURL`。
 - 如果显示“超时”，可能是 Codex CLI 本身响应较慢，稍等后可以从菜单里手动刷新配置。
 - 不要把 `~/.codex/`、`~/.codex/auth.json` 或 `~/.codex-menubar/rpc.log` 上传到公开仓库。
 
@@ -129,6 +139,16 @@ Example:
 {
   "source": "codexRPC",
   "refreshIntervalSeconds": 30
+}
+```
+
+`proxyURL` is optional. Set it when the macOS menu bar app cannot reach ChatGPT through the network environment inherited by GUI apps:
+
+```json
+{
+  "source": "codexRPC",
+  "refreshIntervalSeconds": 30,
+  "proxyURL": "http://127.0.0.1:7890"
 }
 ```
 
