@@ -39,11 +39,11 @@ struct RateLimitWindowSnapshot {
         return String(format: "%02d:%02d", minutes, remainingSeconds)
     }
 
-    var compactCountdownText: String {
-        let seconds = max(Int(resetAt.timeIntervalSinceNow), 0)
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        return String(format: "%02d:%02d", hours, minutes)
+    var compactResetTimeText: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: resetAt)
     }
 }
 
@@ -165,7 +165,7 @@ final class QuotaStatusView: NSView {
 
         if let primary = snapshot.primary {
             drawRightAligned("\(primary.remainingPercent)%", in: NSRect(x: percentColumn.minX, y: rect.midY, width: percentColumn.width, height: 10), attrs: primaryAttrs)
-            drawRightAligned(primary.compactCountdownText, in: NSRect(x: valueColumn.minX, y: rect.midY, width: valueColumn.width, height: 10), attrs: primaryAttrs)
+            drawRightAligned(primary.compactResetTimeText, in: NSRect(x: valueColumn.minX, y: rect.midY, width: valueColumn.width, height: 10), attrs: primaryAttrs)
         } else {
             drawRightAligned("读取", in: NSRect(x: percentColumn.minX, y: rect.midY, width: percentColumn.width, height: 10), attrs: primaryAttrs)
             drawRightAligned("失败", in: NSRect(x: valueColumn.minX, y: rect.midY, width: valueColumn.width, height: 10), attrs: primaryAttrs)
@@ -775,9 +775,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.autoenablesItems = false
 
         if let primary = snapshot.primary {
-            menu.addItem(disabledItem("\(primary.label)：剩余 \(primary.remainingPercent)% · \(primary.countdownText)"))
+            menu.addItem(disabledItem("\(primary.label)：剩余 \(primary.remainingPercent)%"))
             menu.addItem(disabledItem("\(primary.label)：已用 \(primary.usedPercent)%"))
-            menu.addItem(disabledItem("\(primary.label)：重置 \(formatDate(primary.resetAt))"))
+            menu.addItem(disabledItem("\(primary.label)：完整重置 \(formatDate(primary.resetAt))"))
         } else {
             menu.addItem(disabledItem("5 小时：\(snapshot.errorMessage ?? "无数据")"))
         }
